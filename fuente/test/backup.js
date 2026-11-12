@@ -1,0 +1,12 @@
+const { chromium } = require('playwright'); const SP=process.env.SP;
+(async()=>{ const b=await chromium.launch(); const ctx=await b.newContext({acceptDownloads:true}); const p=await ctx.newPage();
+  const errs=[]; p.on('pageerror',e=>errs.push(e.message)); p.on('console',m=>{if(m.type()==='error')errs.push(m.text())});
+  p.on('dialog',d=>d.accept('secreta1'));
+  await p.goto('file:///home/claude/finanzas/dist/MisFinanzas/MisFinanzas.html');
+  await p.fill('#p1','secreta1'); await p.fill('#p2','secreta1'); await p.click('#lock button'); await p.waitForSelector('nav button');
+  await p.click('[data-v=importar]'); await p.setInputFiles('#fi',[SP+'/pdfs/revolut-octubre.pdf']); await p.waitForSelector('.alert');
+  await p.click('[data-v=ajustes]'); const [dl]=await Promise.all([p.waitForEvent('download'), p.click('[data-act=exportar]')]); const f=SP+'/copia.mfin'; await dl.saveAs(f);
+  console.log('copia',dl.suggestedFilename(), require('fs').statSync(f).size, 'plaintext?', require('fs').readFileSync(f,'utf8').includes('Mercadona'));
+  await p.click('[data-v=importar]'); await p.click('[data-act=delFile]'); console.log('tras quitar',await p.evaluate(()=>S.txs.length));
+  await p.click('[data-v=ajustes]'); await p.click('[data-act=restaurar]'); await p.setInputFiles('#fr',[f]); await p.waitForTimeout(2500);
+  console.log('tras restaurar',await p.evaluate(()=>S.txs.length), await p.$eval('#toast',x=>x.textContent)); console.log('errs',errs); await b.close(); })();
