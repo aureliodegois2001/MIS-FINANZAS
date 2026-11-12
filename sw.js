@@ -1,5 +1,5 @@
 // Guarda la app en el dispositivo para que funcione sin conexión. No toca tus datos.
-const CACHE='misfinanzas-88c276f42cc2';
+const CACHE='misfinanzas-f11c68f4958e';
 const FILES=['./','index.html','manifest.webmanifest','apple-touch-icon.png','icon-192.png','icon-512.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
