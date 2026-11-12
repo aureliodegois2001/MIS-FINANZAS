@@ -57,7 +57,7 @@ function estadoInicial(){
     trSnaps:[], card:null, plantilla:[]
   };
   // Valores iniciales personales: solo existen en la versión de escritorio (src/perfil.js no se publica).
-  if(typeof PERFIL_INICIAL==='function'){ var p=PERFIL_INICIAL(); for(var k in p) base[k]=p[k]; }
+  if(typeof PERFIL_INICIAL==='function'){ var p=PERFIL_INICIAL(); for(var k in p) base[k]=p[k]; base.ajTs=1; }
   return base;
 }
 var ES_WEB = /^https?:/.test(location.protocol);
@@ -220,6 +220,8 @@ async function importar(files){
   await guardar(); render();
 }
 function borrarFichero(fid){
+  S.txs.forEach(function(t){ if(t.src===fid) borrado(t); });
+  S.files.forEach(function(f){ if(f.id===fid){ S.del=S.del||{}; S.del['f:'+claveFich(f)]=hoy(); } });
   S.txs = S.txs.filter(function(t){return t.src!==fid;});
   S.trSnaps = S.trSnaps.filter(function(s){return s.src!==fid;});
   if(S.card && S.card.src===fid) S.card=null;
@@ -229,9 +231,9 @@ function borrarFichero(fid){
 /* ---------- aprendizaje de categorias ---------- */
 function cambiarCat(id, nueva){
   var t = S.txs.filter(function(t){return t.id===id;})[0]; if(!t) return;
-  t.cat=nueva; t.man=1;
+  t.cat=nueva; t.man=1; tocar(t);
   var k=norm(t.d), n=0;
-  if(k){ S.rules[k]=nueva; S.txs.forEach(function(o){ if(o!==t && !o.man && norm(o.d)===k && o.cat!==nueva){ o.cat=nueva; n++; } }); }
+  if(k){ S.rules[k]=nueva; S.txs.forEach(function(o){ if(o!==t && !o.man && norm(o.d)===k && o.cat!==nueva){ o.cat=nueva; tocar(o); n++; } }); }
   toast('Aprendido: «'+t.d.slice(0,40)+'» es '+cat(nueva).n+(n?'. Aplicado a '+n+' movimientos más.':'.'));
 }
 
@@ -247,7 +249,7 @@ async function derivar(pass, salt){
 async function cifrar(obj){ var iv=crypto.getRandomValues(new Uint8Array(12)); var ct=await crypto.subtle.encrypt({name:'AES-GCM',iv:iv}, KEY, new TextEncoder().encode(JSON.stringify(obj))); return {salt:SALT, iv:iv, ct:new Uint8Array(ct)}; }
 async function descifrar(blob, key){ var pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:blob.iv}, key, blob.ct); return JSON.parse(new TextDecoder().decode(pt)); }
 var guardando=Promise.resolve();
-function guardar(){ guardando = guardando.then(async function(){ await idbSet('data', await cifrar(S)); }).catch(function(e){ toast('Error al guardar: '+e.message); }); return guardando; }
+function guardar(){ if(typeof sellar==='function') sellar(); guardando = guardando.then(async function(){ await idbSet('data', await cifrar(S)); }).catch(function(e){ toast('Error al guardar: '+e.message); }); return guardando; }
 function b64(u8){ var s=''; for(var i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null,u8.subarray(i,i+0x8000)); return btoa(s); }
 function unb64(s){ var b=atob(s), u=new Uint8Array(b.length); for(var i=0;i<b.length;i++) u[i]=b.charCodeAt(i); return u; }
 
@@ -441,7 +443,7 @@ VISTA.mas=function(){
   var pre=presupuestoTotal(), subs=S.subs.filter(function(x){return x.on;}).reduce(function(a,x){return a+(+x.imp||0);},0), pat=patrimonio();
   var filas=[['presupuesto','🎯','Presupuesto', pre? eur0(totalGasto(UI.mes))+' de '+eur0(pre):''],['deudas','🧾','Deudas', eur0(pat.deudas)],['patrimonio','💎','Patrimonio', eur0(pat.neto)],
     ['suscripciones','📱','Suscripciones', eur0(subs)+'/mes'],['importar','📄','Importar PDFs',''],['ajustes','⚙️','Ajustes','']];
-  return titulo('Más')+'<div class="card lista">'+filas.map(function(f){ return '<button data-v="'+f[0]+'"><span class="le">'+f[1]+'</span><b>'+f[2]+'</b><span class="lv muted">'+f[3]+'</span><span class="chev">›</span></button>'; }).join('')+'</div>'+
+  return titulo('Más')+'<div class="card lista"><button data-act="sync"><span class="le">🔄</span><b>Sincronizar</b><span class="lv muted small">'+haceSync()+'</span><span class="chev">›</span></button></div><div class="card lista">'+filas.map(function(f){ return '<button data-v="'+f[0]+'"><span class="le">'+f[1]+'</span><b>'+f[2]+'</b><span class="lv muted">'+f[3]+'</span><span class="chev">›</span></button>'; }).join('')+'</div>'+
     '<div class="card lista"><button data-act="bloquear"><span class="le">🔒</span><b>Bloquear</b><span class="lv"></span><span class="chev">›</span></button></div>';
 };
 
@@ -581,6 +583,9 @@ POST.importar=function(m){
 VISTA.ajustes=function(){
   var rk=Object.keys(S.rules).sort(), dias = S.lastBackup ? Math.round((new Date(hoy())-new Date(S.lastBackup))/864e5) : null;
   var h=titulo('Ajustes');
+  h+='<div class="card"><div class="ah"><span class="le">🔄</span><b>Sincronizar con '+(ES_IOS?'el ordenador':'el iPhone')+'</b><span class="small muted">'+haceSync()+'</span></div>'+
+    '<div class="row" style="margin-top:12px"><button class="btn pri" data-act="sync">Sincronizar</button>'+(FS_OK?'<button class="btn" data-act="syncCambiar">Elegir otro archivo</button>':'<button class="btn" data-act="syncGuardar">Crear archivo</button>')+'</div>'+
+    '<p class="small muted" style="margin:10px 0 0">☁️ Usa un archivo cifrado en iCloud Drive. Se juntan los datos de los dos sin perder ni duplicar nada.</p></div>';
   h+='<div class="card"><div class="ah"><span class="le">💾</span><b>Copia de seguridad</b><span class="small '+(dias===null||dias>35?'warnt':'muted')+'">'+(dias===null?'Nunca':'Hace '+dias+' días')+'</span></div>'+
     '<div class="row" style="margin-top:12px"><button class="btn pri" data-act="exportar">Guardar copia</button><button class="btn" data-act="restaurar">Restaurar</button></div></div>';
   h+='<details class="card ad"><summary><span class="le">🏛️</span><b>Fijos de BBVA</b></summary><div class="tablewrap" style="margin-top:12px"><table><tbody>'+S.plantilla.map(function(p,i){
@@ -591,7 +596,7 @@ VISTA.ajustes=function(){
     '<div class="row"><input type="text" id="ncN" placeholder="Nueva categoría"><select id="ncT"><option value="g">Gasto</option><option value="i">Ingreso</option><option value="t">Traspaso</option></select><button class="btn" data-act="addCat">Añadir</button></div></details>';
   h+='<details class="card ad"><summary><span class="le">🧠</span><b>Lo que ha aprendido</b><span class="small muted" style="margin-left:auto">'+rk.length+'</span></summary>'+(rk.length? '<div class="lista" style="margin-top:8px;max-height:320px;overflow:auto">'+rk.map(function(k){return '<div class="lrow"><span class="le">'+emo(S.rules[k])+'</span><span class="lt"><b>'+esc(k)+'</b><span class="small muted">'+esc(cat(S.rules[k]).n)+'</span></span><button class="ib" data-act="delRule" data-k="'+esc(k)+'" aria-label="Olvidar">✕</button></div>';}).join('')+'</div>' : '<p class="muted small" style="margin:10px 0 0">Aún nada.</p>')+'</details>';
   h+='<details class="card ad"><summary><span class="le">🔑</span><b>Cambiar contraseña</b></summary><div class="row" style="margin-top:12px"><input type="password" id="np1" placeholder="Nueva" autocomplete="new-password"><input type="password" id="np2" placeholder="Repítela" autocomplete="new-password"><button class="btn" data-act="cambiarPass">Cambiar</button></div></details>';
-  h+='<p class="small muted" style="text-align:center;margin-top:18px">🔐 Tus datos no salen de este dispositivo y van cifrados.</p>';
+  h+='<p class="small muted" style="text-align:center;margin-top:18px">🔐 Tus datos van cifrados y solo salen de aquí cuando tú sincronizas.</p>';
   return h;
 };
 function kpi(l,v,d){ return '<div class="card kpi"><div class="l">'+l+'</div><div class="v num">'+v+'</div><div class="d">'+d+'</div></div>'; }
@@ -632,7 +637,7 @@ function dialogo(titulo, campos, botones, onOk, onDel){
   d.innerHTML='<form method="dialog"><h2>'+titulo+'</h2><div class="grid g2">'+campos+'</div><div class="row between"><div>'+(onDel?'<button type="button" class="btn danger" id="dDel">Eliminar</button>':'')+'</div><div class="row"><button type="button" class="btn" id="dNo">Cancelar</button><button class="btn pri" id="dOk">'+(botones||'Guardar')+'</button></div></div></form>';
   $('#dNo',d).onclick=function(){d.close();};
   if(onDel) $('#dDel',d).onclick=function(){ onDel(); d.close(); guardar(); render(); };
-  $('form',d).onsubmit=function(e){ e.preventDefault(); var v={}; $$('[name]',d).forEach(function(el){ v[el.name]= el.type==='checkbox'? el.checked : el.value; }); if(onOk(v)!==false){ d.close(); guardar(); render(); } };
+  $('form',d).onsubmit=function(e){ e.preventDefault(); var v={}; $$('[name]',d).forEach(function(el){ v[el.name]= el.type==='checkbox'? el.checked : el.value; }); if(onOk(v)!==false){ if(titulo.indexOf('movimiento')<0) S.ajTs=Date.now(); d.close(); guardar(); render(); } };
   d.showModal();
 }
 function fld(l,html,full){ return '<label class="field"'+(full?' style="grid-column:1/-1"':'')+'>'+l+html+'</label>'; }
@@ -648,8 +653,8 @@ function dlgMov(id){
     fld('Categoría','<select name="cat">'+catOpts(t.cat)+'</select>',1),
     null, function(v){ var imp=r2(toNum(v.imp)*(+v.s)); if(!imp){ toast('Pon un importe.'); return false; }
       if(t.nuevo){ var n={id:S.nextId++, f:v.f, c:v.c, d:v.d.trim(), det:'Añadido a mano', imp:imp, sal:null, cat:v.cat, man:1, src:'manual', ord:v.f+'|m|'+S.nextId}; S.txs.push(n); UI.mes=mesDe(v.f); }
-      else { t.f=v.f; t.c=v.c; t.d=v.d.trim(); t.imp=imp; t.cat=v.cat; t.man=1; }
-    }, t.nuevo?null:function(){ S.txs=S.txs.filter(function(x){return x.id!==id;}); });
+      else { t.f=v.f; t.c=v.c; t.d=v.d.trim(); t.imp=imp; t.cat=v.cat; t.man=1; tocar(t); }
+    }, t.nuevo?null:function(){ borrado(t); S.txs=S.txs.filter(function(x){return x.id!==id;}); });
 }
 function dlgDeuda(id){
   var d = id ? S.debts.filter(function(x){return x.id===id;})[0] : {n:'',pend:'',cuota:'',fin:'',nota:'',nuevo:1};
@@ -765,6 +770,10 @@ document.addEventListener('click', function(e){
   if(el.dataset.goCat){ e.preventDefault(); UI.vista='movimientos'; UI.fCat=el.dataset.goCat; UI.fCuenta=''; UI.fTxt=''; UI.fTipo=''; UI.buscar=false; UI.fMes=''; render(); window.scrollTo(0,0); return; }
   if(el.dataset.setMes){ UI.mes=el.dataset.setMes; render(); return; }
   var a=el.dataset.act, id=+el.dataset.id;
+  if({ocultarSetup:1,addPl:1,delPl:1,addCat:1,delRule:1}[a]) S.ajTs=Date.now();
+  if(a==='sync'){ sincronizar(); return; }
+  if(a==='syncCambiar'){ syncPC(true); return; }
+  if(a==='syncGuardar'){ compartirSync(); return; }
   if(a==='rapido') rapido();
   else if(a==='pickPDF') elegirPDF();
   else if(a==='allAl'){ UI.allAl=!UI.allAl; render(); }
@@ -800,6 +809,7 @@ document.addEventListener('click', function(e){
 });
 document.addEventListener('change', function(e){
   var el=e.target, d=el.dataset;
+  if(d.bud||d.num||d.pl!==undefined||d.fuga) S.ajTs=Date.now();
   if(d.cat){ cambiarCat(+d.cat, el.value); guardar(); render(); }
   else if(d.ch==='mes'){ UI.mes=el.value; UI.fMes=''; render(); }
   else if(d.ch==='todosMeses'){ UI.fMes=el.checked?'todos':''; render(); }

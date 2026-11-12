@@ -32,11 +32,11 @@ ${head}
 <body>
 <div id="lock"></div>
 <div id="app" style="display:none"><nav aria-label="Secciones"></nav><main></main></div>
-<dialog id="dlg"></dialog><dialog id="sheet" class="sheet"></dialog><input type="file" id="fiG" accept="application/pdf,.pdf" multiple hidden><input type="file" id="frG" accept=".mfin,.json,application/octet-stream" hidden><div id="tip"></div><div id="toast" role="status"></div>
+<dialog id="dlg"></dialog><dialog id="sheet" class="sheet"></dialog><input type="file" id="fiG" accept="application/pdf,.pdf" multiple hidden><input type="file" id="frG" accept=".mfin,.json,application/octet-stream" hidden><input type="file" id="fsG" hidden><div id="tip"></div><div id="toast" role="status"></div>
 <script>${safe(r('node_modules/pdfjs-dist/build/pdf.min.js'))}</script>
 <script>${safe(r('node_modules/pdfjs-dist/build/pdf.worker.min.js'))}</script>
 <script>${safe(r('src/parsers.js'))}</script>
-${perfil}<script>${safe(r('src/app.js'))}</script>
+${perfil}<script>${safe(r('src/app.js'))}</script><script>${safe(r('src/sync.js'))}</script>
 ${sw}</body></html>`;
 }
 // escritorio
